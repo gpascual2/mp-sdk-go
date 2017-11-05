@@ -1,0 +1,29 @@
+package mercadopago_test
+
+import (
+	"fmt"
+	"os"
+	"testing"
+)
+
+// This file bootstraps the testing suite.
+// Rename this file to "common_test.go" and setup your MercadoPago credentials. 
+// They will be used for testing in sandbox mode.
+const (
+	TestClientID     string = "CLIENT_ID"
+	TestClientSecret string = "CLIENT_SECRET"
+)
+
+func TestMain(m *testing.M) {
+	fmt.Println("\n>>>> MercadoPago SDK GO - Test : Common : Init")
+	// Run tests
+	os.Exit(m.Run())
+}
+
+// TestCredentialsSetup - Verify that Mercado Pago credentials has been configured
+func TestCredentialsSetup(t *testing.T) {
+	fmt.Printf("\n>> Using MP client ID: %s ", TestClientID)
+	if TestClientID == "CLIENT_ID" || TestClientSecret == "CLIENT_SECRET" {
+		t.Fatalf("Error at bootstrapping testing suite. Please replace setup your Mercado Pago credentials.")
+	}
+}
