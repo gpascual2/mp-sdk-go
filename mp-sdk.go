@@ -68,6 +68,10 @@ func (mp *MP) obtainAccessToken() error {
 	if err != nil {
 		return err
 	}
+	// Check response status
+	if r.StatusCode != 200 && r.StatusCode != 201 {
+		return fmt.Errorf("Bad status received in HTTP response: %v", r.Status)
+	}
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return err

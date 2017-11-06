@@ -2,12 +2,22 @@ package mercadopago_test
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/gpascual2/mp-sdk-go"
 )
 
 var mp mercadopago.MP
+
+// This function is used for setup before executing the test functions
+func TestMain(m *testing.M) {
+	fmt.Println("\n>>>> MercadoPago SDK GO - Test : Main")
+	mp = mercadopago.NewMP(TestClientID, TestClientSecret, true)
+
+	// Run the other tests
+	os.Exit(m.Run())
+}
 
 // Test - An instance of MP should be created
 func TestMPInstance(t *testing.T) {
