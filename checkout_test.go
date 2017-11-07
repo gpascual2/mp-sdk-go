@@ -9,6 +9,7 @@ import (
 
 var prefBase *mercadopago.Preference
 var prefCreated *mercadopago.Preference
+var err error
 
 func init() {
 	prefBase = &mercadopago.Preference{
@@ -30,7 +31,7 @@ func init() {
 func TestCreatePreference(t *testing.T) {
 	fmt.Println("mp_test : CreatePreference")
 
-	prefCreated, err := mp.CreatePreference(prefBase)
+	prefCreated, err = mp.CreatePreference(prefBase)
 	if err != nil {
 		t.Fatalf("Error creating a checkout preference: %v", err)
 	}
@@ -45,7 +46,6 @@ func TestCreatePreference(t *testing.T) {
 // TestGetPreference - A checkout preference should be obtained from MercadoPago API
 func TestGetPreference(t *testing.T) {
 	fmt.Println("mp_test : GetPreference")
-
 	prefGet, err := mp.GetPreference(prefCreated.ID)
 	if err != nil {
 		t.Fatalf("Error getting the checkout preference: %v", err)

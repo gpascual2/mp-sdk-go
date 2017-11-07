@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // General API configuration values
@@ -21,10 +22,11 @@ const (
 
 // MP is the implementation to consume Mercado Pago API services
 type MP struct {
-	AccessToken  string
-	ClientID     string
-	clientSecret string
-	Sandbox      bool
+	CustomAccessToken string
+	BasicAccessToken  string
+	ClientID          string
+	clientSecret      string
+	Sandbox           bool
 }
 
 // TokenResponse is the structure of data obtained from the MP Auth Token service
@@ -39,9 +41,10 @@ type TokenResponse struct {
 }
 
 // NewMP returns a new instance of the MP service library
-func NewMP(clientID string, clientSecret string, sandbox bool) MP {
+func NewMP(clientID string, clientSecret string, customAccessToken string, sandbox bool) MP {
 	mp := MP{}
-	mp.AccessToken = ""
+	mp.BasicAccessToken = ""
+	mp.CustomAccessToken = customAccessToken
 	mp.ClientID = clientID
 	mp.clientSecret = clientSecret
 	mp.Sandbox = sandbox
@@ -50,21 +53,21 @@ func NewMP(clientID string, clientSecret string, sandbox bool) MP {
 
 // GetAccessToken returns an Access Token obtained from MP API
 func (mp *MP) GetAccessToken() (string, error) {
-	if mp.AccessToken == "" {
+	if mp.BasicAccessToken == "" {
 		err := mp.obtainAccessToken()
 		if err != nil {
 			return "", err
 		}
 	}
-	return mp.AccessToken, nil
+	return mp.BasicAccessToken, nil
 }
 
 func (mp *MP) obtainAccessToken() error {
-	data := url.Values{}
+	data := &url.Values{}
 	data.Set("client_id", mp.ClientID)
 	data.Add("client_secret", mp.clientSecret)
 	data.Add("grant_type", "client_credentials")
-	r, err := mp.restFormCall("POST", "/oauth/token", data, false)
+	r, err := mp.restFormCall("POST", "/oauth/token", data, 0)
 	if err != nil {
 		return err
 	}
@@ -80,31 +83,44 @@ func (mp *MP) obtainAccessToken() error {
 	if err = json.Unmarshal(body, &token); err != nil {
 		return err
 	}
-	mp.AccessToken = token.AccessToken
+	mp.BasicAccessToken = token.AccessToken
 	return nil
 }
 
 // GET HTTP method wrapper for authentication (Form)
-func (mp *MP) get(resource string, values url.Values) (*http.Response, error) {
-	return mp.restFormCall("GET", resource, values, true)
+func (mp *MP) get(resource string, values *url.Values, auth int) (*http.Response, error) {
+	return mp.restFormCall("GET", resource, values, auth)
+}
+
+// JGET HTTP method wrapper for authentication (JSON)
+func (mp *MP) jget(resource string, data interface{}, auth int) (*http.Response, error) {
+	dataBuffer := new(bytes.Buffer)
+	if data != nil {
+		json.NewEncoder(dataBuffer).Encode(data)
+	}
+	return mp.restJSONCall("GET", resource, dataBuffer, auth)
 }
 
 // POST HTTP method wrapper for authentication (JSON)
-func (mp *MP) post(resource string, data interface{}) (*http.Response, error) {
+func (mp *MP) post(resource string, data interface{}, auth int) (*http.Response, error) {
 	dataBuffer := new(bytes.Buffer)
-	json.NewEncoder(dataBuffer).Encode(data)
-	return mp.restJSONCall("POST", resource, dataBuffer, true)
+	if data != nil {
+		json.NewEncoder(dataBuffer).Encode(data)
+	}
+	return mp.restJSONCall("POST", resource, dataBuffer, auth)
 }
 
 // PUT HTTP method wrapper for authentication (JSON)
-func (mp *MP) put(resource string, data interface{}) (*http.Response, error) {
+func (mp *MP) put(resource string, data interface{}, auth int) (*http.Response, error) {
 	dataBuffer := new(bytes.Buffer)
-	json.NewEncoder(dataBuffer).Encode(data)
-	return mp.restJSONCall("PUT", resource, dataBuffer, true)
+	if data != nil {
+		json.NewEncoder(dataBuffer).Encode(data)
+	}
+	return mp.restJSONCall("PUT", resource, dataBuffer, auth)
 }
 
 // generic API REST call with Mercado Pago preferences
-func (mp *MP) restFormCall(method string, resource string, values url.Values, auth bool) (*http.Response, error) {
+func (mp *MP) restFormCall(method string, resource string, values *url.Values, auth int) (*http.Response, error) {
 	// Build resource URL
 	u, err := url.ParseRequestURI(APIBaseURL)
 	if err != nil {
@@ -112,15 +128,23 @@ func (mp *MP) restFormCall(method string, resource string, values url.Values, au
 	}
 	u.Path = resource
 	urlStr := fmt.Sprintf("%v", u)
-	// If authed method, then add a form entry for the MP Access Token
-	if auth {
-		if mp.AccessToken == "" {
+	// If no values passed, then initialize an empty object
+	if values == nil {
+		values = &url.Values{}
+	}
+	// If authed method, then add a form entry for the MP Access Token (Basic Workflow)
+	if auth == 1 {
+		if mp.BasicAccessToken == "" {
 			err := mp.obtainAccessToken()
 			if err != nil {
 				return nil, err
 			}
 		}
-		values.Add("access_token", mp.AccessToken)
+		values.Add("access_token", mp.BasicAccessToken)
+	}
+	// If authed method, then add a form entry for the MP Access Token (Custom Workflow)
+	if auth == 2 {
+		values.Add("access_token", mp.CustomAccessToken)
 	}
 	// Create HTTP Request
 	r, _ := http.NewRequest(method, urlStr, bytes.NewBufferString(values.Encode()))
@@ -133,7 +157,7 @@ func (mp *MP) restFormCall(method string, resource string, values url.Values, au
 }
 
 // generic API REST call with Mercado Pago preferences
-func (mp *MP) restJSONCall(method string, resource string, data *bytes.Buffer, auth bool) (*http.Response, error) {
+func (mp *MP) restJSONCall(method string, resource string, data *bytes.Buffer, auth int) (*http.Response, error) {
 	// Build resource URL
 	u, err := url.ParseRequestURI(APIBaseURL)
 	if err != nil {
@@ -141,16 +165,31 @@ func (mp *MP) restJSONCall(method string, resource string, data *bytes.Buffer, a
 	}
 	u.Path = resource
 	urlStr := fmt.Sprintf("%v", u)
-	// If authed method, then append the MP Access Token to the resource URL
-	if auth {
-		if mp.AccessToken == "" {
+	// If authed method, then add a form entry for the MP Access Token (Basic Workflow)
+	if auth == 1 {
+		if mp.BasicAccessToken == "" {
 			err := mp.obtainAccessToken()
 			if err != nil {
 				return nil, err
 			}
 		}
-		urlStr += "?access_token=" + mp.AccessToken
+		if strings.Contains(urlStr, "?") {
+			urlStr += "&access_token=" + mp.BasicAccessToken
+		} else {
+			urlStr += "?access_token=" + mp.BasicAccessToken
+		}
 	}
+	// If authed method, then add a form entry for the MP Access Token (Custom Workflow)
+	if auth == 2 {
+		if strings.Contains(urlStr, "?") {
+			urlStr += "&access_token=" + mp.CustomAccessToken
+		} else {
+			urlStr += "?access_token=" + mp.CustomAccessToken
+		}
+	}
+
+	fmt.Println(" <DEBUG> URL: ", urlStr)
+
 	// Create HTTP Request
 	r, _ := http.NewRequest(method, urlStr, data)
 	r.Header.Add("Content-Length", strconv.Itoa(data.Len()))
