@@ -25,6 +25,9 @@ func init() {
 		CurrencyID: "ARS",
 		UnitPrice:  10.2,
 	})
+	prefBase.PaymentMethods.Installments = 1
+	prefBase.PaymentMethods.ExcludedPaymentTypes = append(prefBase.PaymentMethods.ExcludedPaymentTypes, mercadopago.ID{ID: "ticket"})
+	prefBase.PaymentMethods.ExcludedPaymentTypes = append(prefBase.PaymentMethods.ExcludedPaymentTypes, mercadopago.ID{ID: "atm"})
 }
 
 // TestCreatePreference - A checkout preference should be obtained from MercadoPago API
@@ -38,6 +41,7 @@ func TestCreatePreference(t *testing.T) {
 	if prefCreated.InitPoint == "" {
 		t.Errorf("Expected InitPoint to contain a value and is empty")
 	}
+	fmt.Println("SandBox init: ", prefCreated.SandboxInitPoint)
 	if prefCreated.Items[0] != prefBase.Items[0] {
 		t.Errorf("Expected Preference Item to equal the requested one. Sent: %v / Got: %v", prefBase.Items[0], prefCreated.Items[0])
 	}

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -27,6 +29,7 @@ type MP struct {
 	ClientID          string
 	clientSecret      string
 	Sandbox           bool
+	Debug             bool
 }
 
 // TokenResponse is the structure of data obtained from the MP Auth Token service
@@ -41,13 +44,14 @@ type TokenResponse struct {
 }
 
 // NewMP returns a new instance of the MP service library
-func NewMP(clientID string, clientSecret string, customAccessToken string, sandbox bool) MP {
+func NewMP(clientID string, clientSecret string, customAccessToken string, sandbox bool, debug bool) MP {
 	mp := MP{}
 	mp.BasicAccessToken = ""
 	mp.CustomAccessToken = customAccessToken
 	mp.ClientID = clientID
 	mp.clientSecret = clientSecret
 	mp.Sandbox = sandbox
+	mp.Debug = debug
 	return mp
 }
 
@@ -148,12 +152,25 @@ func (mp *MP) restFormCall(method string, resource string, values *url.Values, a
 	}
 	// Create HTTP Request
 	r, _ := http.NewRequest(method, urlStr, bytes.NewBufferString(values.Encode()))
-	r.Header.Add("Content-Length", strconv.Itoa(len(values.Encode())))
-	r.Header.Set("User-Agent", MPUserAgent)
-	r.Header.Add("accept", MIMEJSON)
-	r.Header.Add("content-type", MIMEForm)
+	if err == nil {
+		r.Header.Add("Content-Length", strconv.Itoa(len(values.Encode())))
+		r.Header.Set("User-Agent", MPUserAgent)
+		r.Header.Add("accept", MIMEJSON)
+		r.Header.Add("content-type", MIMEForm)
+		// DEBUG only - Print full request
+		if mp.Debug {
+			debug(httputil.DumpRequestOut(r, true))
+		}
+	}
 	client := &http.Client{}
-	return client.Do(r)
+	resp, respErr := client.Do(r)
+	if respErr == nil {
+		// DEBUG only - Print full response
+		if mp.Debug {
+			debug(httputil.DumpResponse(resp, true))
+		}
+	}
+	return resp, respErr
 }
 
 // generic API REST call with Mercado Pago preferences
@@ -188,15 +205,34 @@ func (mp *MP) restJSONCall(method string, resource string, data *bytes.Buffer, a
 		}
 	}
 
-	fmt.Println(" <DEBUG> URL: ", urlStr)
-
 	// Create HTTP Request
-	r, _ := http.NewRequest(method, urlStr, data)
-	r.Header.Add("Content-Length", strconv.Itoa(data.Len()))
-	r.Header.Set("User-Agent", MPUserAgent)
-	r.Header.Set("Content-Type", MIMEJSON)
-	r.Header.Add("Accept", MIMEJSON)
+	r, err := http.NewRequest(method, urlStr, data)
+	if err == nil {
+		r.Header.Add("Content-Length", strconv.Itoa(data.Len()))
+		r.Header.Set("User-Agent", MPUserAgent)
+		r.Header.Set("Content-Type", MIMEJSON)
+		r.Header.Add("Accept", MIMEJSON)
+		// DEBUG only - Print full request
+		if mp.Debug {
+			debug(httputil.DumpRequestOut(r, true))
+		}
+	}
+
 	client := &http.Client{}
 	resp, respErr := client.Do(r)
+	if respErr == nil {
+		// DEBUG only - Print full response
+		if mp.Debug {
+			debug(httputil.DumpResponse(resp, true))
+		}
+	}
 	return resp, respErr
+}
+
+func debug(data []byte, err error) {
+	if err == nil {
+		fmt.Printf("%s\n\n", data)
+	} else {
+		log.Fatalf("%s\n\n", err)
+	}
 }
